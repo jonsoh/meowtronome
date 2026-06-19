@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+
+@theme {
+  --animate-pulse-beat: pulse-beat 0.18s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --animate-pulse-beat: none;
+  }
+}
+
+@keyframes pulse-beat {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
