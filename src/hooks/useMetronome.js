@@ -87,15 +87,24 @@ function scheduleMeow(audioCtx, time, level = 0.5) {
 }
 
 export function useMetronome(initialBpm = 100) {
-  const [bpm, setBpm] = useState(initialBpm)
+  const [bpm, setBpmState] = useState(initialBpm)
   const [isPlaying, setIsPlaying] = useState(false)
   const [beat, setBeat] = useState(0)
   const [meow, setMeow] = useState(false)
+  // Tempo drift: when on, the tempo itself wanders via a velocity-driven
+  // random walk and the displayed BPM follows along. It roams freely (no
+  // pull back to center) and only bounces off the min/max bounds.
+  const [drift, setDrift] = useState(false)
 
   const audioCtxRef = useRef(null)
   const nextNoteTimeRef = useRef(0)
+  // Precise current tempo (may be fractional); the source of truth for
+  // scheduling. `bpm` state holds the rounded value for display.
   const bpmRef = useRef(initialBpm)
   const meowRef = useRef(false)
+  const driftRef = useRef(false)
+  // Tempo "velocity" (BPM change per beat) for a smooth wandering drift.
+  const driftVelocityRef = useRef(0)
   const timerRef = useRef(null)
 
   // Beat-clock anchor for phase-locked visuals: the audio-clock time the most
@@ -108,13 +117,22 @@ export function useMetronome(initialBpm = 100) {
     index: 0
   })
 
-  useEffect(() => {
-    bpmRef.current = bpm
-  }, [bpm])
+  // Set the tempo from outside (user input). Keeps the precise ref in sync
+  // with the displayed value.
+  const setBpm = useCallback((value) => {
+    setBpmState(value)
+    bpmRef.current = value
+  }, [])
 
   useEffect(() => {
     meowRef.current = meow
   }, [meow])
+
+  useEffect(() => {
+    driftRef.current = drift
+    // Reset momentum so toggling drift on starts from a calm, current tempo.
+    if (drift) driftVelocityRef.current = 0
+  }, [drift])
 
   const stop = useCallback(() => {
     if (timerRef.current !== null) {
@@ -122,6 +140,29 @@ export function useMetronome(initialBpm = 100) {
       timerRef.current = null
     }
     setIsPlaying(false)
+  }, [])
+
+  // Advance the (possibly drifting) tempo by one beat and return the interval
+  // in seconds. When drift is on, a damped random walk nudges a tempo velocity
+  // each beat; the tempo integrates that velocity and bounces off the BPM
+  // bounds, and the rounded value is pushed to the display.
+  const advanceTempo = useCallback(() => {
+    if (driftRef.current) {
+      const accel = (Math.random() * 2 - 1) * 0.3
+      let v = driftVelocityRef.current * 0.92 + accel
+      let next = bpmRef.current + v
+      if (next <= MIN_BPM) {
+        next = MIN_BPM
+        v = Math.abs(v) * 0.5
+      } else if (next >= MAX_BPM) {
+        next = MAX_BPM
+        v = -Math.abs(v) * 0.5
+      }
+      driftVelocityRef.current = v
+      bpmRef.current = next
+      setBpmState(Math.round(next))
+    }
+    return 60 / bpmRef.current
   }, [])
 
   const start = useCallback(() => {
@@ -136,6 +177,9 @@ export function useMetronome(initialBpm = 100) {
     if (audioCtx.state === 'suspended') audioCtx.resume()
 
     nextNoteTimeRef.current = audioCtx.currentTime + 0.05
+
+    // Start each run with no drift momentum.
+    driftVelocityRef.current = 0
 
     // Park the visual clock at the first upcoming beat so the indicator can
     // sit at its starting extreme until the first beat actually sounds.
@@ -154,7 +198,7 @@ export function useMetronome(initialBpm = 100) {
         if (meowRef.current) scheduleMeow(audioCtx, t)
         else scheduleClick(audioCtx, t)
 
-        const interval = 60 / bpmRef.current
+        const interval = advanceTempo()
         const index = beatIndexRef.current++
         const delayMs = Math.max(0, (t - audioCtx.currentTime) * 1000)
         setTimeout(() => {
@@ -167,7 +211,7 @@ export function useMetronome(initialBpm = 100) {
         nextNoteTimeRef.current += interval
       }
     }, LOOKAHEAD_MS)
-  }, [])
+  }, [advanceTempo])
 
   const toggle = useCallback(() => {
     if (isPlaying) stop()
@@ -198,6 +242,8 @@ export function useMetronome(initialBpm = 100) {
     beat,
     meow,
     setMeow,
+    drift,
+    setDrift,
     start,
     stop,
     toggle,

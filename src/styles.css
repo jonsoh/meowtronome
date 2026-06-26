@@ -2,11 +2,13 @@
 
 @theme {
   --animate-pulse-beat: pulse-beat 0.18s ease-out both;
+  --animate-fade-in: fade-in 0.25s ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --animate-pulse-beat: none;
+    --animate-fade-in: none;
   }
 }
 
@@ -19,5 +21,16 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
