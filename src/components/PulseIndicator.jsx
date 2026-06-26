@@ -17,20 +17,20 @@ export default function PulseIndicator({
 }) {
   const catRef = useRef(null)
 
-  // `beat` is the running beat index, so accents and the cat's resting side can
-  // be derived directly from props (no ref reads during render).
+  // `beat` is the running beat index, so accents and the cat's resting side
+  // derive from props (no ref reads during render).
   const accent =
     isPlaying &&
     beatsPerMeasure > 0 &&
     beat >= 0 &&
     beat % beatsPerMeasure === 0
-  // The cat sits at the left extreme on even beats, the right on odd ones, so
-  // an accented beat flashes whichever guide line it lands on.
+
+  // Cat rests at the left extreme on even beats, the right on odd ones, so an
+  // accent flashes whichever guide line it lands on.
   const accentOnRight = beat % 2 === 1
 
-  // Phase-locked pendulum: every animation frame we compute the cat's position
-  // from the audio clock, so at each beat's onset (phase 0) it sits exactly at
-  // an extreme and the attack lands when the cat is furthest left/right.
+  // Phase-locked pendulum: each frame the cat's position is computed from the
+  // audio clock, so it sits at an extreme exactly on every beat's onset.
   useEffect(() => {
     if (!bounce) return
 
@@ -51,10 +51,8 @@ export default function PulseIndicator({
             1,
             Math.max(0, interval > 0 ? elapsed / interval : 0)
           )
-          // from = the extreme this beat starts at (alternating each beat).
-          // factor sweeps from `from` (phase 0) to `-from` (phase 1), so the
-          // cat is at an extreme exactly on every beat onset and the motion
-          // stays continuous across beats.
+          // `from` is the extreme this beat starts at (alternating); `factor`
+          // sweeps from `from` to `-from`, keeping motion continuous.
           const from = index % 2 === 0 ? -1 : 1
           const factor = from * (1 - 2 * easeInOut(phase))
           el.style.transform = `translateX(${factor * SWING_X}px) rotate(${factor * SWING_DEG}deg)`

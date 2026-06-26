@@ -4,7 +4,6 @@
   --animate-pulse-beat: pulse-beat 0.18s ease-out both;
   --animate-pulse-beat-accent: pulse-beat-accent 0.22s ease-out both;
   --animate-guide-flash: guide-flash 0.3s ease-out both;
-  --animate-fade-in: fade-in 0.25s ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -12,7 +11,6 @@
     --animate-pulse-beat: none;
     --animate-pulse-beat-accent: none;
     --animate-guide-flash: none;
-    --animate-fade-in: none;
   }
 }
 
@@ -44,16 +42,5 @@
   from {
     background-color: rgb(168 85 247);
     box-shadow: 0 0 8px rgb(168 85 247);
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }

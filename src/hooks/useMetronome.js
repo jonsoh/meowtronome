@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  loadSetting,
+  saveSetting,
+  usePersistentState
+} from './usePersistentState'
 
 const LOOKAHEAD_MS = 25
 const SCHEDULE_AHEAD_SEC = 0.1
@@ -23,46 +28,39 @@ function scheduleClick(audioCtx, time, accent = false) {
   osc.stop(time + 0.06)
 }
 
-// Synthesize a short, cute kitten "mew" entirely from oscillators + filters.
-// Recipe: a sawtooth "glottal" source pitched up in kitten territory with a
-// rising, inquisitive contour, shaped by two bandpass formants for the
-// "ee->ew" vowel, gently low-passed to round off the buzz, plus light
-// vibrato for life.
+// Synthesize a short, cute kitten "mew" from oscillators + filters: a sawtooth
+// "glottal" source with a rising, inquisitive contour, shaped by two bandpass
+// formants for the "ee->ew" vowel, low-passed to round off the buzz.
 function scheduleMeow(audioCtx, time, accent = false) {
-  // Slightly randomize length each call (~0.17-0.23s) so mews don't feel
-  // mechanically identical.
+  // Randomize length, pitch and wobble a little each call so consecutive mews
+  // sound like slightly different little cats instead of an identical loop.
   const dur = 0.2 * (0.85 + Math.random() * 0.3)
-  // Higher, kitten-sized fundamental = cuter. A small random shift each call
-  // (~±10%) makes consecutive mews sound like slightly different little cats
-  // instead of an identical loop. Downbeats jump up a few semitones (and get
-  // louder below) to accent the start of each measure.
+  // Downbeats jump up and get louder (below) to accent the start of a measure.
   const f0 = 780 * (0.9 + Math.random() * 0.2) * (accent ? 1.18 : 1)
   const level = accent ? 0.68 : 0.5
 
   const osc = audioCtx.createOscillator()
   osc.type = 'sawtooth'
-  // Pitch contour: quick rise to a bright peak, settling slightly UP for an
-  // inquisitive "mew?" lilt (cuter than a falling adult-cat "meow").
+  // Quick rise to a bright peak, settling slightly UP for an inquisitive
+  // "mew?" lilt (cuter than a falling adult-cat "meow").
   osc.frequency.setValueAtTime(f0 * 0.85, time)
   osc.frequency.linearRampToValueAtTime(f0 * 1.3, time + dur * 0.45)
   osc.frequency.linearRampToValueAtTime(f0 * 1.05, time + dur)
 
-  // Light, slightly faster vibrato for a delicate shimmer. Jitter the rate
-  // and depth a touch so each mew wobbles a little differently.
+  // Light vibrato for a delicate, living shimmer.
   const vib = audioCtx.createOscillator()
   const vibGain = audioCtx.createGain()
   vib.frequency.value = 22 * (0.85 + Math.random() * 0.3)
   vibGain.gain.value = 10 * (0.7 + Math.random() * 0.6)
   vib.connect(vibGain).connect(osc.frequency)
 
-  // Gentle low-pass to soften the sawtooth's harshness into a rounder,
-  // cuter tone.
+  // Soften the sawtooth's harshness into a rounder, cuter tone.
   const softener = audioCtx.createBiquadFilter()
   softener.type = 'lowpass'
   softener.frequency.value = 3200
   softener.Q.value = 0.7
 
-  // Master amplitude envelope: quick attack, brief hold, smooth decay.
+  // Quick attack, brief hold, smooth decay.
   const master = audioCtx.createGain()
   master.gain.setValueAtTime(0, time)
   master.gain.linearRampToValueAtTime(level, time + 0.02)
@@ -91,25 +89,29 @@ function scheduleMeow(audioCtx, time, accent = false) {
 }
 
 export function useMetronome(initialBpm = 100) {
-  const [bpm, setBpmState] = useState(initialBpm)
+  const [bpm, setBpmState] = useState(() => loadSetting('bpm', initialBpm))
   const [isPlaying, setIsPlaying] = useState(false)
-  // `beat` holds the running beat index (resets to 0 each Start). It changes
-  // every tick to drive beat-synced UI; -1 means nothing has played yet.
+
+  // `beat` is the running beat index (resets to 0 each Start); -1 means nothing
+  // has played yet. It changes every tick to drive beat-synced UI.
   const [beat, setBeat] = useState(-1)
-  const [meow, setMeow] = useState(false)
-  // Accented downbeats: beats per measure. 0 means no accent (plain beats);
-  // otherwise the first beat of each measure is emphasized.
-  const [beatsPerMeasure, setBeatsPerMeasure] = useState(4)
-  // Tempo drift: when on, the tempo itself wanders via a velocity-driven
-  // random walk and the displayed BPM follows along. It roams freely (no
-  // pull back to center) and only bounces off the min/max bounds.
-  const [drift, setDrift] = useState(false)
+  const [meow, setMeow] = usePersistentState('meow', false)
+
+  // Beats per measure for accents; 0 disables accents.
+  const [beatsPerMeasure, setBeatsPerMeasure] = usePersistentState(
+    'beatsPerMeasure',
+    4
+  )
+
+  // When on, the tempo wanders via a velocity-driven random walk, roaming
+  // freely (no pull to center) and only bouncing off the min/max bounds.
+  const [drift, setDrift] = usePersistentState('drift', false)
 
   const audioCtxRef = useRef(null)
   const nextNoteTimeRef = useRef(0)
   // Precise current tempo (may be fractional); the source of truth for
   // scheduling. `bpm` state holds the rounded value for display.
-  const bpmRef = useRef(initialBpm)
+  const bpmRef = useRef(bpm)
   const meowRef = useRef(false)
   const beatsPerMeasureRef = useRef(4)
   const driftRef = useRef(false)
@@ -117,21 +119,23 @@ export function useMetronome(initialBpm = 100) {
   const driftVelocityRef = useRef(0)
   const timerRef = useRef(null)
 
-  // Beat-clock anchor for phase-locked visuals: the audio-clock time the most
-  // recent beat sounded, its interval, and its running index. The visual can
-  // read these plus `getAudioTime()` to compute exactly where it should be.
+  // Anchor for phase-locked visuals: the audio-clock time of the most recent
+  // beat, its interval, and its index. With `getAudioTime()` the visual can
+  // compute exactly where it should be.
   const beatIndexRef = useRef(0)
   const clockRef = useRef({
     time: 0,
-    interval: 60 / initialBpm,
+    interval: 60 / bpm,
     index: 0
   })
 
-  // Set the tempo from outside (user input). Keeps the precise ref in sync
-  // with the displayed value.
+  // Set the tempo from outside (user input), keeping the precise ref in sync
+  // and persisting the user's choice. Drift mutates bpm via setBpmState
+  // instead, so the wandering tempo isn't saved.
   const setBpm = useCallback((value) => {
     setBpmState(value)
     bpmRef.current = value
+    saveSetting('bpm', value)
   }, [])
 
   useEffect(() => {
@@ -157,9 +161,8 @@ export function useMetronome(initialBpm = 100) {
   }, [])
 
   // Advance the (possibly drifting) tempo by one beat and return the interval
-  // in seconds. When drift is on, a damped random walk nudges a tempo velocity
-  // each beat; the tempo integrates that velocity and bounces off the BPM
-  // bounds, and the rounded value is pushed to the display.
+  // in seconds. When drift is on, a damped random walk nudges a velocity that
+  // the tempo integrates, bouncing off the BPM bounds.
   const advanceTempo = useCallback(() => {
     if (driftRef.current) {
       const accel = (Math.random() * 2 - 1) * 0.3
@@ -195,8 +198,8 @@ export function useMetronome(initialBpm = 100) {
     // Start each run with no drift momentum.
     driftVelocityRef.current = 0
 
-    // Park the visual clock at the first upcoming beat so the indicator can
-    // sit at its starting extreme until the first beat actually sounds.
+    // Park the visual clock at the first upcoming beat so the indicator sits at
+    // its starting extreme until the first beat sounds.
     beatIndexRef.current = 0
     setBeat(-1)
     clockRef.current = {
@@ -264,8 +267,6 @@ export function useMetronome(initialBpm = 100) {
     setBeatsPerMeasure,
     drift,
     setDrift,
-    start,
-    stop,
     toggle,
     clockRef,
     getAudioTime

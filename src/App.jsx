@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import Button from './components/Button'
 import BpmControl from './components/BpmControl'
 import PulseIndicator from './components/PulseIndicator'
 import Toggle from './components/Toggle'
 import { useMetronome } from './hooks/useMetronome'
+import { usePersistentState } from './hooks/usePersistentState'
 
 export default function App() {
   const {
@@ -21,7 +22,28 @@ export default function App() {
     clockRef,
     getAudioTime
   } = useMetronome(100)
-  const [bounce, setBounce] = useState(false)
+  const [bounce, setBounce] = usePersistentState('bounce', false)
+
+  // Spacebar toggles start/stop, except while a form control or button is
+  // focused so typing and native button activation still work normally.
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.code !== 'Space') return
+      const tag = e.target.tagName
+      if (
+        tag === 'INPUT' ||
+        tag === 'SELECT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'BUTTON'
+      ) {
+        return
+      }
+      e.preventDefault()
+      toggle()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [toggle])
 
   return (
     <div className="min-h-screen bg-linear-to-br from-purple-500 via-pink-500 to-red-500 dark:from-indigo-950 dark:via-purple-950 dark:to-slate-950 flex items-center justify-center p-6">
@@ -67,12 +89,20 @@ export default function App() {
               onChange={setBounce}
               label="Visual mode 👀"
             />
-            <Toggle checked={drift} onChange={setDrift} label="Tempo drift 🌀" />
+            <Toggle
+              checked={drift}
+              onChange={setDrift}
+              label="Tempo drift 🌀"
+            />
           </div>
 
-          <Button variant="primary" onClick={toggle}>
-            {isPlaying ? 'Stop 🛑' : 'Start ▶️'}
-          </Button>
+          <Button onClick={toggle}>{isPlaying ? 'Stop 🛑' : 'Start ▶️'}</Button>
+
+          <p className="sr-only" role="status">
+            {isPlaying
+              ? `Metronome playing at ${bpm} BPM`
+              : 'Metronome stopped'}
+          </p>
         </div>
       </div>
     </div>
