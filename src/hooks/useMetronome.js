@@ -98,6 +98,16 @@ export function useMetronome(initialBpm = 100) {
   const meowRef = useRef(false)
   const timerRef = useRef(null)
 
+  // Beat-clock anchor for phase-locked visuals: the audio-clock time the most
+  // recent beat sounded, its interval, and its running index. The visual can
+  // read these plus `getAudioTime()` to compute exactly where it should be.
+  const beatIndexRef = useRef(0)
+  const clockRef = useRef({
+    time: 0,
+    interval: 60 / initialBpm,
+    index: 0
+  })
+
   useEffect(() => {
     bpmRef.current = bpm
   }, [bpm])
@@ -126,6 +136,15 @@ export function useMetronome(initialBpm = 100) {
     if (audioCtx.state === 'suspended') audioCtx.resume()
 
     nextNoteTimeRef.current = audioCtx.currentTime + 0.05
+
+    // Park the visual clock at the first upcoming beat so the indicator can
+    // sit at its starting extreme until the first beat actually sounds.
+    beatIndexRef.current = 0
+    clockRef.current = {
+      time: nextNoteTimeRef.current,
+      interval: 60 / bpmRef.current,
+      index: 0
+    }
     setIsPlaying(true)
 
     timerRef.current = setInterval(() => {
@@ -135,10 +154,17 @@ export function useMetronome(initialBpm = 100) {
         if (meowRef.current) scheduleMeow(audioCtx, t)
         else scheduleClick(audioCtx, t)
 
+        const interval = 60 / bpmRef.current
+        const index = beatIndexRef.current++
         const delayMs = Math.max(0, (t - audioCtx.currentTime) * 1000)
-        setTimeout(() => setBeat((b) => b + 1), delayMs)
+        setTimeout(() => {
+          setBeat((b) => b + 1)
+          // Record the precise audio-onset time of this beat so the visual
+          // phase is measured against the audio clock, not the timer.
+          clockRef.current = { time: t, interval, index }
+        }, delayMs)
 
-        nextNoteTimeRef.current += 60 / bpmRef.current
+        nextNoteTimeRef.current += interval
       }
     }, LOOKAHEAD_MS)
   }, [])
@@ -147,6 +173,13 @@ export function useMetronome(initialBpm = 100) {
     if (isPlaying) stop()
     else start()
   }, [isPlaying, start, stop])
+
+  // Current audio-clock time, used by phase-locked visuals. Falls back to 0
+  // before the AudioContext exists.
+  const getAudioTime = useCallback(
+    () => (audioCtxRef.current ? audioCtxRef.current.currentTime : 0),
+    []
+  )
 
   useEffect(() => {
     return () => {
@@ -158,5 +191,17 @@ export function useMetronome(initialBpm = 100) {
     }
   }, [])
 
-  return { bpm, setBpm, isPlaying, beat, meow, setMeow, start, stop, toggle }
+  return {
+    bpm,
+    setBpm,
+    isPlaying,
+    beat,
+    meow,
+    setMeow,
+    start,
+    stop,
+    toggle,
+    clockRef,
+    getAudioTime
+  }
 }

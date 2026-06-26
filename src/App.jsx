@@ -1,11 +1,23 @@
+import { useState } from 'react'
 import Button from './components/Button'
 import BpmControl from './components/BpmControl'
 import PulseIndicator from './components/PulseIndicator'
+import Toggle from './components/Toggle'
 import { useMetronome } from './hooks/useMetronome'
 
 export default function App() {
-  const { bpm, setBpm, isPlaying, beat, meow, setMeow, toggle } =
-    useMetronome(100)
+  const {
+    bpm,
+    setBpm,
+    isPlaying,
+    beat,
+    meow,
+    setMeow,
+    toggle,
+    clockRef,
+    getAudioTime
+  } = useMetronome(100)
+  const [bounce, setBounce] = useState(false)
 
   return (
     <div className="min-h-screen bg-linear-to-br from-purple-500 via-pink-500 to-red-500 dark:from-indigo-950 dark:via-purple-950 dark:to-slate-950 flex items-center justify-center p-6">
@@ -15,19 +27,24 @@ export default function App() {
             Meowtronome 🐱
           </h1>
 
-          <PulseIndicator beat={beat} isPlaying={isPlaying} />
+          <PulseIndicator
+            beat={beat}
+            isPlaying={isPlaying}
+            bounce={bounce}
+            clockRef={clockRef}
+            getAudioTime={getAudioTime}
+          />
 
           <BpmControl bpm={bpm} onChange={setBpm} />
 
-          <label className="flex items-center justify-center gap-2 text-sm font-medium text-slate-700 cursor-pointer select-none dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={meow}
-              onChange={(e) => setMeow(e.target.checked)}
-              className="w-4 h-4 accent-purple-500 dark:accent-purple-400"
+          <div className="flex flex-col items-center gap-2">
+            <Toggle checked={meow} onChange={setMeow} label="Meow mode 🐾" />
+            <Toggle
+              checked={bounce}
+              onChange={setBounce}
+              label="Visual mode 👀"
             />
-            Meow mode 🐾
-          </label>
+          </div>
 
           <Button variant="primary" onClick={toggle}>
             {isPlaying ? 'Stop 🛑' : 'Start ▶️'}
