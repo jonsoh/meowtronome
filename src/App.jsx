@@ -22,7 +22,6 @@ export default function App() {
     getAudioTime
   } = useMetronome(100)
   const [bounce, setBounce] = useState(false)
-  const [chaosOpen, setChaosOpen] = useState(false)
 
   return (
     <div className="min-h-screen bg-linear-to-br from-purple-500 via-pink-500 to-red-500 dark:from-indigo-950 dark:via-purple-950 dark:to-slate-950 flex items-center justify-center p-6">
@@ -68,46 +67,12 @@ export default function App() {
               onChange={setBounce}
               label="Visual mode 👀"
             />
+            <Toggle checked={drift} onChange={setDrift} label="Tempo drift 🌀" />
           </div>
 
           <Button variant="primary" onClick={toggle}>
             {isPlaying ? 'Stop 🛑' : 'Start ▶️'}
           </Button>
-
-          <div className="border-t border-slate-200 pt-4 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={() => setChaosOpen((open) => !open)}
-              aria-expanded={chaosOpen}
-              aria-controls="chaos-panel"
-              className="flex w-full items-center justify-between text-sm font-semibold text-slate-700 cursor-pointer select-none dark:text-slate-300"
-            >
-              <span>😈 Chaos</span>
-              <span
-                aria-hidden="true"
-                className={`transition-transform ${chaosOpen ? 'rotate-180' : ''}`}
-              >
-                ▾
-              </span>
-            </button>
-
-            {chaosOpen && (
-              <div
-                id="chaos-panel"
-                className="mt-4 space-y-4 animate-fade-in motion-reduce:animate-none"
-              >
-                <Toggle
-                  checked={drift}
-                  onChange={setDrift}
-                  label="Tempo drift 🌀"
-                />
-              </div>
-            )}
-          </div>
-
-          <p className="text-xs text-center text-slate-500 dark:text-slate-400">
-            More chaos coming soon~
-          </p>
         </div>
       </div>
     </div>
