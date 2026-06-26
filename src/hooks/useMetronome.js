@@ -100,7 +100,7 @@ export function useMetronome(initialBpm = 100) {
   // Beats per measure for accents; 0 disables accents.
   const [beatsPerMeasure, setBeatsPerMeasure] = usePersistentState(
     'beatsPerMeasure',
-    4
+    0
   )
 
   // When on, the tempo wanders via a velocity-driven random walk, roaming
@@ -113,7 +113,7 @@ export function useMetronome(initialBpm = 100) {
   // scheduling. `bpm` state holds the rounded value for display.
   const bpmRef = useRef(bpm)
   const meowRef = useRef(false)
-  const beatsPerMeasureRef = useRef(4)
+  const beatsPerMeasureRef = useRef(beatsPerMeasure)
   const driftRef = useRef(false)
   // Tempo "velocity" (BPM change per beat) for a smooth wandering drift.
   const driftVelocityRef = useRef(0)
