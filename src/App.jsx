@@ -13,6 +13,8 @@ export default function App() {
     beat,
     meow,
     setMeow,
+    beatsPerMeasure,
+    setBeatsPerMeasure,
     drift,
     setDrift,
     toggle,
@@ -34,11 +36,30 @@ export default function App() {
             beat={beat}
             isPlaying={isPlaying}
             bounce={bounce}
+            beatsPerMeasure={beatsPerMeasure}
             clockRef={clockRef}
             getAudioTime={getAudioTime}
           />
 
           <BpmControl bpm={bpm} onChange={setBpm} />
+
+          <div className="flex items-center justify-between text-sm font-medium text-slate-700 dark:text-slate-300">
+            <label htmlFor="beats-per-measure">Beats per measure</label>
+            <select
+              id="beats-per-measure"
+              value={beatsPerMeasure}
+              onChange={(e) => setBeatsPerMeasure(parseInt(e.target.value, 10))}
+              className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:ring-purple-500"
+            >
+              <option value="0">Off</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+            </select>
+          </div>
 
           <div className="flex flex-col items-center gap-2">
             <Toggle checked={meow} onChange={setMeow} label="Meow mode 🐾" />

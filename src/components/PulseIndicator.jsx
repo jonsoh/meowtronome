@@ -11,10 +11,22 @@ export default function PulseIndicator({
   beat,
   isPlaying,
   bounce,
+  beatsPerMeasure,
   clockRef,
   getAudioTime
 }) {
   const catRef = useRef(null)
+
+  // `beat` is the running beat index, so accents and the cat's resting side can
+  // be derived directly from props (no ref reads during render).
+  const accent =
+    isPlaying &&
+    beatsPerMeasure > 0 &&
+    beat >= 0 &&
+    beat % beatsPerMeasure === 0
+  // The cat sits at the left extreme on even beats, the right on odd ones, so
+  // an accented beat flashes whichever guide line it lands on.
+  const accentOnRight = beat % 2 === 1
 
   // Phase-locked pendulum: every animation frame we compute the cat's position
   // from the audio clock, so at each beat's onset (phase 0) it sits exactly at
@@ -58,13 +70,23 @@ export default function PulseIndicator({
     return (
       <div className="relative flex items-center justify-center h-24 overflow-hidden">
         <div
+          key={`l-${beat}`}
           aria-hidden="true"
-          className="absolute top-3 bottom-3 w-px bg-slate-500/70 dark:bg-slate-400/60"
+          className={`absolute top-3 bottom-3 w-px bg-slate-500/70 dark:bg-slate-400/60 ${
+            accent && !accentOnRight
+              ? 'animate-guide-flash motion-reduce:animate-none'
+              : ''
+          }`}
           style={{ left: `calc(50% - ${SWING_X}px)` }}
         />
         <div
+          key={`r-${beat}`}
           aria-hidden="true"
-          className="absolute top-3 bottom-3 w-px bg-slate-500/70 dark:bg-slate-400/60"
+          className={`absolute top-3 bottom-3 w-px bg-slate-500/70 dark:bg-slate-400/60 ${
+            accent && accentOnRight
+              ? 'animate-guide-flash motion-reduce:animate-none'
+              : ''
+          }`}
           style={{ left: `calc(50% + ${SWING_X}px)` }}
         />
         <div
@@ -85,7 +107,9 @@ export default function PulseIndicator({
         aria-hidden="true"
         className={`w-20 h-20 rounded-full flex items-center justify-center text-4xl select-none ring-1 ring-black/5 dark:ring-slate-700 ${
           isPlaying
-            ? 'bg-purple-100 dark:bg-purple-900/40 animate-pulse-beat motion-reduce:animate-none'
+            ? `bg-purple-100 dark:bg-purple-900/40 motion-reduce:animate-none ${
+                accent ? 'animate-pulse-beat-accent' : 'animate-pulse-beat'
+              }`
             : 'bg-slate-100 dark:bg-slate-800'
         }`}
       >

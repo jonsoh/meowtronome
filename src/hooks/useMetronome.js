@@ -6,14 +6,16 @@ const SCHEDULE_AHEAD_SEC = 0.1
 export const MIN_BPM = 30
 export const MAX_BPM = 300
 
-function scheduleClick(audioCtx, time) {
+function scheduleClick(audioCtx, time, accent = false) {
   const osc = audioCtx.createOscillator()
   const gain = audioCtx.createGain()
   osc.type = 'square'
-  osc.frequency.value = 1000
+  // Downbeats ring higher and louder so the start of each measure stands out.
+  osc.frequency.value = accent ? 1500 : 1000
+  const level = accent ? 0.42 : 0.3
 
   gain.gain.setValueAtTime(0, time)
-  gain.gain.linearRampToValueAtTime(0.3, time + 0.001)
+  gain.gain.linearRampToValueAtTime(level, time + 0.001)
   gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.05)
 
   osc.connect(gain).connect(audioCtx.destination)
@@ -26,14 +28,16 @@ function scheduleClick(audioCtx, time) {
 // rising, inquisitive contour, shaped by two bandpass formants for the
 // "ee->ew" vowel, gently low-passed to round off the buzz, plus light
 // vibrato for life.
-function scheduleMeow(audioCtx, time, level = 0.5) {
+function scheduleMeow(audioCtx, time, accent = false) {
   // Slightly randomize length each call (~0.17-0.23s) so mews don't feel
   // mechanically identical.
   const dur = 0.2 * (0.85 + Math.random() * 0.3)
   // Higher, kitten-sized fundamental = cuter. A small random shift each call
   // (~±10%) makes consecutive mews sound like slightly different little cats
-  // instead of an identical loop.
-  const f0 = 780 * (0.9 + Math.random() * 0.2)
+  // instead of an identical loop. Downbeats jump up a few semitones (and get
+  // louder below) to accent the start of each measure.
+  const f0 = 780 * (0.9 + Math.random() * 0.2) * (accent ? 1.18 : 1)
+  const level = accent ? 0.68 : 0.5
 
   const osc = audioCtx.createOscillator()
   osc.type = 'sawtooth'
@@ -89,8 +93,13 @@ function scheduleMeow(audioCtx, time, level = 0.5) {
 export function useMetronome(initialBpm = 100) {
   const [bpm, setBpmState] = useState(initialBpm)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [beat, setBeat] = useState(0)
+  // `beat` holds the running beat index (resets to 0 each Start). It changes
+  // every tick to drive beat-synced UI; -1 means nothing has played yet.
+  const [beat, setBeat] = useState(-1)
   const [meow, setMeow] = useState(false)
+  // Accented downbeats: beats per measure. 0 means no accent (plain beats);
+  // otherwise the first beat of each measure is emphasized.
+  const [beatsPerMeasure, setBeatsPerMeasure] = useState(4)
   // Tempo drift: when on, the tempo itself wanders via a velocity-driven
   // random walk and the displayed BPM follows along. It roams freely (no
   // pull back to center) and only bounces off the min/max bounds.
@@ -102,6 +111,7 @@ export function useMetronome(initialBpm = 100) {
   // scheduling. `bpm` state holds the rounded value for display.
   const bpmRef = useRef(initialBpm)
   const meowRef = useRef(false)
+  const beatsPerMeasureRef = useRef(4)
   const driftRef = useRef(false)
   // Tempo "velocity" (BPM change per beat) for a smooth wandering drift.
   const driftVelocityRef = useRef(0)
@@ -127,6 +137,10 @@ export function useMetronome(initialBpm = 100) {
   useEffect(() => {
     meowRef.current = meow
   }, [meow])
+
+  useEffect(() => {
+    beatsPerMeasureRef.current = beatsPerMeasure
+  }, [beatsPerMeasure])
 
   useEffect(() => {
     driftRef.current = drift
@@ -184,6 +198,7 @@ export function useMetronome(initialBpm = 100) {
     // Park the visual clock at the first upcoming beat so the indicator can
     // sit at its starting extreme until the first beat actually sounds.
     beatIndexRef.current = 0
+    setBeat(-1)
     clockRef.current = {
       time: nextNoteTimeRef.current,
       interval: 60 / bpmRef.current,
@@ -195,14 +210,17 @@ export function useMetronome(initialBpm = 100) {
       const horizon = audioCtx.currentTime + SCHEDULE_AHEAD_SEC
       while (nextNoteTimeRef.current < horizon) {
         const t = nextNoteTimeRef.current
-        if (meowRef.current) scheduleMeow(audioCtx, t)
-        else scheduleClick(audioCtx, t)
+        const index = beatIndexRef.current++
+        const perMeasure = beatsPerMeasureRef.current
+        const accent = perMeasure > 0 && index % perMeasure === 0
+
+        if (meowRef.current) scheduleMeow(audioCtx, t, accent)
+        else scheduleClick(audioCtx, t, accent)
 
         const interval = advanceTempo()
-        const index = beatIndexRef.current++
         const delayMs = Math.max(0, (t - audioCtx.currentTime) * 1000)
         setTimeout(() => {
-          setBeat((b) => b + 1)
+          setBeat(index)
           // Record the precise audio-onset time of this beat so the visual
           // phase is measured against the audio clock, not the timer.
           clockRef.current = { time: t, interval, index }
@@ -242,6 +260,8 @@ export function useMetronome(initialBpm = 100) {
     beat,
     meow,
     setMeow,
+    beatsPerMeasure,
+    setBeatsPerMeasure,
     drift,
     setDrift,
     start,
