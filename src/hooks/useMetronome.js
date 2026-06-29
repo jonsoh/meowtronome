@@ -35,9 +35,10 @@ function scheduleMeow(audioCtx, time, accent = false) {
   // Randomize length, pitch and wobble a little each call so consecutive mews
   // sound like slightly different little cats instead of an identical loop.
   const dur = 0.2 * (0.85 + Math.random() * 0.3)
-  // Downbeats jump up and get louder (below) to accent the start of a measure.
-  const f0 = 780 * (0.9 + Math.random() * 0.2) * (accent ? 1.18 : 1)
-  const level = accent ? 0.68 : 0.5
+  // Downbeats leap up a clear fifth and get louder (below) so the accent stays
+  // unmistakable above the ±6% per-beat jitter on normal beats.
+  const f0 = 780 * (0.94 + Math.random() * 0.12) * (accent ? 1.5 : 1)
+  const level = accent ? 0.7 : 0.5
 
   const osc = audioCtx.createOscillator()
   osc.type = 'sawtooth'
