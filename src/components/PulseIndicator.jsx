@@ -13,11 +13,12 @@ export default function PulseIndicator({
   bounce,
   beatsPerMeasure,
   clockRef,
-  getAudioTime
+  getAudioTime,
+  emoji
 }) {
-  const catRef = useRef(null)
+  const indicatorRef = useRef(null)
 
-  // `beat` is the running beat index, so accents and the cat's resting side
+  // `beat` is the running beat index, so accents and the icon's resting side
   // derive from props (no ref reads during render).
   const accent =
     isPlaying &&
@@ -25,11 +26,11 @@ export default function PulseIndicator({
     beat >= 0 &&
     beat % beatsPerMeasure === 0
 
-  // Cat rests at the left extreme on even beats, the right on odd ones, so an
+  // The icon rests at the left extreme on even beats, the right on odd ones, so an
   // accent flashes whichever guide line it lands on.
   const accentOnRight = beat % 2 === 1
 
-  // Phase-locked pendulum: each frame the cat's position is computed from the
+  // Phase-locked pendulum: each frame the icon's position is computed from the
   // audio clock, so it sits at an extreme exactly on every beat's onset.
   useEffect(() => {
     if (!bounce) return
@@ -40,7 +41,7 @@ export default function PulseIndicator({
 
     let raf
     const tick = () => {
-      const el = catRef.current
+      const el = indicatorRef.current
       if (el) {
         if (!isPlaying || reduced) {
           el.style.transform = 'translateX(0px) rotate(0deg)'
@@ -88,11 +89,11 @@ export default function PulseIndicator({
           style={{ left: `calc(50% + ${SWING_X}px)` }}
         />
         <div
-          ref={catRef}
+          ref={indicatorRef}
           aria-hidden="true"
           className="text-5xl select-none will-change-transform"
         >
-          🐱
+          {emoji}
         </div>
       </div>
     )
@@ -111,7 +112,7 @@ export default function PulseIndicator({
             : 'bg-slate-100 dark:bg-slate-800'
         }`}
       >
-        🐱
+        {emoji}
       </div>
     </div>
   )

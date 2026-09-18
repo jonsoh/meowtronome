@@ -3,8 +3,11 @@ import Button from './components/Button'
 import BpmControl from './components/BpmControl'
 import PulseIndicator from './components/PulseIndicator'
 import Toggle from './components/Toggle'
-import { useMetronome } from './hooks/useMetronome'
-import { usePersistentState } from './hooks/usePersistentState'
+import { SOUND_MODES, useMetronome } from './hooks/useMetronome'
+import {
+  loadSetting,
+  usePersistentState
+} from './hooks/usePersistentState'
 
 export default function App() {
   const {
@@ -12,8 +15,8 @@ export default function App() {
     setBpm,
     isPlaying,
     beat,
-    meow,
-    setMeow,
+    soundMode,
+    setSoundMode,
     beatsPerMeasure,
     setBeatsPerMeasure,
     drift,
@@ -23,6 +26,29 @@ export default function App() {
     getAudioTime
   } = useMetronome(100)
   const [bounce, setBounce] = usePersistentState('bounce', false)
+  const [duckMode, setDuckMode] = usePersistentState(
+    'duckMode',
+    loadSetting('duckVersion', false)
+  )
+  const animalSoundMode = duckMode ? SOUND_MODES.QUACK : SOUND_MODES.MEOW
+
+  useEffect(() => {
+    if (duckMode && soundMode === SOUND_MODES.MEOW) {
+      setSoundMode(SOUND_MODES.QUACK)
+    }
+    if (!duckMode && soundMode === SOUND_MODES.QUACK) {
+      setSoundMode(SOUND_MODES.CLICK)
+    }
+  }, [duckMode, soundMode, setSoundMode])
+
+  const toggleDuckMode = () => {
+    const nextDuckMode = !duckMode
+    setDuckMode(nextDuckMode)
+
+    if (soundMode !== SOUND_MODES.CLICK) {
+      setSoundMode(nextDuckMode ? SOUND_MODES.QUACK : SOUND_MODES.MEOW)
+    }
+  }
 
   // Spacebar toggles start/stop, except while a form control or button is
   // focused so typing and native button activation still work normally.
@@ -47,10 +73,19 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-linear-to-br from-purple-500 via-pink-500 to-red-500 dark:from-indigo-950 dark:via-purple-950 dark:to-slate-950 flex items-center justify-center p-6">
-      <div className="w-full max-w-xl rounded-2xl bg-white/95 backdrop-blur-sm shadow-xl shadow-purple-900/10 ring-1 ring-black/5 dark:bg-slate-900 dark:shadow-purple-950/40 dark:ring-slate-800">
+      <div className="relative w-full max-w-xl rounded-2xl bg-white/95 backdrop-blur-sm shadow-xl shadow-purple-900/10 ring-1 ring-black/5 dark:bg-slate-900 dark:shadow-purple-950/40 dark:ring-slate-800">
+        <button
+          type="button"
+          onClick={toggleDuckMode}
+          aria-label={duckMode ? 'Return to cat mode' : 'Enter duck mode'}
+          title={duckMode ? 'Return to cat mode' : 'Enter duck mode'}
+          className="absolute top-3 right-3 rounded-md p-1 text-lg opacity-45 grayscale transition hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 motion-reduce:transition-none"
+        >
+          {duckMode ? '🐱' : '🦆'}
+        </button>
         <div className="p-6 space-y-6">
           <h1 className="text-2xl font-bold text-center text-slate-900 dark:text-slate-100">
-            Meowtronome 🐱
+            {duckMode ? 'Meowtronome? 🦆' : 'Meowtronome 🐱'}
           </h1>
 
           <PulseIndicator
@@ -60,6 +95,7 @@ export default function App() {
             beatsPerMeasure={beatsPerMeasure}
             clockRef={clockRef}
             getAudioTime={getAudioTime}
+            emoji={duckMode ? '🦆' : '🐱'}
           />
 
           <BpmControl bpm={bpm} onChange={setBpm} />
@@ -83,7 +119,15 @@ export default function App() {
           </div>
 
           <div className="flex flex-col items-center gap-2">
-            <Toggle checked={meow} onChange={setMeow} label="Meow mode 🐾" />
+            <Toggle
+              checked={soundMode === animalSoundMode}
+              onChange={(enabled) =>
+                setSoundMode(
+                  enabled ? animalSoundMode : SOUND_MODES.CLICK
+                )
+              }
+              label={duckMode ? 'Quack mode 🦆' : 'Meow mode 🐾'}
+            />
             <Toggle
               checked={bounce}
               onChange={setBounce}

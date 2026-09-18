@@ -10,6 +10,11 @@ const SCHEDULE_AHEAD_SEC = 0.1
 
 export const MIN_BPM = 30
 export const MAX_BPM = 300
+export const SOUND_MODES = Object.freeze({
+  CLICK: 'click',
+  MEOW: 'meow',
+  QUACK: 'quack'
+})
 
 function scheduleClick(audioCtx, time, accent = false) {
   const osc = audioCtx.createOscillator()
@@ -89,6 +94,85 @@ function scheduleMeow(audioCtx, time, accent = false) {
   vib.stop(time + dur + 0.02)
 }
 
+function scheduleQuack(audioCtx, time, accent = false) {
+  const dur = 0.22 * (0.9 + Math.random() * 0.2)
+  // Keep a little natural variation on every beat. Metered downbeats jump a
+  // clear fifth, matching the high-low distinction used by meow mode.
+  const pitchJitter = 0.95 + Math.random() * 0.1
+  const f0 = 235 * pitchJitter * (accent ? 1.5 : 1)
+  const level = accent ? 0.56 : 0.38
+
+  const osc = audioCtx.createOscillator()
+  const roughness = audioCtx.createOscillator()
+  const roughnessDepth = audioCtx.createGain()
+  const bodyGain = audioCtx.createGain()
+  const softener = audioCtx.createBiquadFilter()
+  const master = audioCtx.createGain()
+
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(f0 * 0.98, time)
+  osc.frequency.linearRampToValueAtTime(f0 * 1.05, time + dur * 0.2)
+  osc.frequency.exponentialRampToValueAtTime(f0 * 0.92, time + dur)
+
+  // A duck's vibrating labia produce a slightly irregular reed tone rather
+  // than a clean oscillator, but the roughness is much subtler than vibrato.
+  roughness.type = 'sine'
+  roughness.frequency.value = 31 * (0.9 + Math.random() * 0.2)
+  roughnessDepth.gain.value = 4 * (0.8 + Math.random() * 0.4)
+  roughness.connect(roughnessDepth).connect(osc.frequency)
+
+  softener.type = 'lowpass'
+  softener.frequency.value = 3400
+  softener.Q.value = 0.8
+  softener.connect(master)
+
+  master.gain.setValueAtTime(0, time)
+  master.gain.linearRampToValueAtTime(level, time + 0.004)
+  master.gain.setValueAtTime(level, time + dur * 0.12)
+  master.gain.linearRampToValueAtTime(level * 0.62, time + dur * 0.55)
+  master.gain.exponentialRampToValueAtTime(0.0001, time + dur)
+  master.connect(audioCtx.destination)
+
+  bodyGain.gain.value = 0.22
+  osc.connect(bodyGain).connect(softener)
+
+  const addResonance = (frequency, q, resonanceLevel) => {
+    const filter = audioCtx.createBiquadFilter()
+    const resonanceGain = audioCtx.createGain()
+    filter.type = 'bandpass'
+    filter.Q.value = q
+    filter.frequency.value = frequency
+    resonanceGain.gain.value = resonanceLevel
+    osc.connect(filter).connect(resonanceGain).connect(softener)
+  }
+  addResonance(950, 3.5, 0.38)
+  addResonance(1950, 4.5, 1)
+
+  const noiseLength = Math.ceil(audioCtx.sampleRate * dur)
+  const noiseBuffer = audioCtx.createBuffer(1, noiseLength, audioCtx.sampleRate)
+  const noiseData = noiseBuffer.getChannelData(0)
+  for (let i = 0; i < noiseLength; i += 1) {
+    noiseData[i] = Math.random() * 2 - 1
+  }
+  const noise = audioCtx.createBufferSource()
+  const noiseFilter = audioCtx.createBiquadFilter()
+  const noiseGain = audioCtx.createGain()
+  noise.buffer = noiseBuffer
+  noiseFilter.type = 'bandpass'
+  noiseFilter.frequency.value = 2300
+  noiseFilter.Q.value = 0.8
+  noiseGain.gain.setValueAtTime(0.1, time)
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.035)
+  noise.connect(noiseFilter).connect(noiseGain).connect(softener)
+
+  osc.start(time)
+  roughness.start(time)
+  noise.start(time)
+  osc.stop(time + dur + 0.02)
+  roughness.stop(time + dur + 0.02)
+  noise.stop(time + dur)
+}
+
 export function useMetronome(initialBpm = 100) {
   const [bpm, setBpmState] = useState(() => loadSetting('bpm', initialBpm))
   const [isPlaying, setIsPlaying] = useState(false)
@@ -96,7 +180,10 @@ export function useMetronome(initialBpm = 100) {
   // `beat` is the running beat index (resets to 0 each Start); -1 means nothing
   // has played yet. It changes every tick to drive beat-synced UI.
   const [beat, setBeat] = useState(-1)
-  const [meow, setMeow] = usePersistentState('meow', false)
+  const [soundMode, setSoundMode] = usePersistentState(
+    'soundMode',
+    loadSetting('meow', false) ? SOUND_MODES.MEOW : SOUND_MODES.CLICK
+  )
 
   // Beats per measure for accents; 0 disables accents.
   const [beatsPerMeasure, setBeatsPerMeasure] = usePersistentState(
@@ -113,7 +200,7 @@ export function useMetronome(initialBpm = 100) {
   // Precise current tempo (may be fractional); the source of truth for
   // scheduling. `bpm` state holds the rounded value for display.
   const bpmRef = useRef(bpm)
-  const meowRef = useRef(false)
+  const soundModeRef = useRef(soundMode)
   const beatsPerMeasureRef = useRef(beatsPerMeasure)
   const driftRef = useRef(false)
   // Tempo "velocity" (BPM change per beat) for a smooth wandering drift.
@@ -140,8 +227,8 @@ export function useMetronome(initialBpm = 100) {
   }, [])
 
   useEffect(() => {
-    meowRef.current = meow
-  }, [meow])
+    soundModeRef.current = soundMode
+  }, [soundMode])
 
   useEffect(() => {
     beatsPerMeasureRef.current = beatsPerMeasure
@@ -218,8 +305,13 @@ export function useMetronome(initialBpm = 100) {
         const perMeasure = beatsPerMeasureRef.current
         const accent = perMeasure > 0 && index % perMeasure === 0
 
-        if (meowRef.current) scheduleMeow(audioCtx, t, accent)
-        else scheduleClick(audioCtx, t, accent)
+        if (soundModeRef.current === SOUND_MODES.MEOW) {
+          scheduleMeow(audioCtx, t, accent)
+        } else if (soundModeRef.current === SOUND_MODES.QUACK) {
+          scheduleQuack(audioCtx, t, accent)
+        } else {
+          scheduleClick(audioCtx, t, accent)
+        }
 
         const interval = advanceTempo()
         const delayMs = Math.max(0, (t - audioCtx.currentTime) * 1000)
@@ -262,8 +354,8 @@ export function useMetronome(initialBpm = 100) {
     setBpm,
     isPlaying,
     beat,
-    meow,
-    setMeow,
+    soundMode,
+    setSoundMode,
     beatsPerMeasure,
     setBeatsPerMeasure,
     drift,
